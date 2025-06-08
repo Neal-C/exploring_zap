@@ -85,6 +85,10 @@ const ScrollEndpoint = struct {
     pub fn get(_: *ScrollEndpoint, arena: Allocator, context: *MyContext, r: zap.Request) !void {
         // const used_token = get_bearer_token(r);
         if (r.query) |query| {
+            if (query.len < 4) {
+                return r.setStatus(.bad_request);
+            }
+
             // query -> id=8
             // id at 3rd index
             const query_id = query[3];
@@ -124,44 +128,44 @@ const ScrollEndpoint = struct {
             const s = try string.toOwnedSlice();
 
             r.setStatus(.ok);
-            try r.sendJson(s);
-        } else {
-            const query_result = try context.db_connection.query("SELECT * FROM scroll", .{});
-            defer query_result.deinit();
-
-            var scrolls = std.ArrayList(Scroll).init(arena);
-
-            while (try query_result.next()) |row| {
-                const id = row.get(i32, 0);
-
-                const rank = Level.from_string(row.get([]u8, 1));
-
-                const jutsu = row.get([]u8, 2);
-
-                const usage = row.get([]u8, 3);
-
-                const scroll = Scroll{
-                    .id = @bitCast(id),
-                    .rank = rank,
-                    .jutsu = jutsu,
-                    .usage = usage,
-                };
-
-                try scrolls.append(scroll);
-            }
-
-            var string = std.ArrayList(u8).init(arena);
-
-            const scrolls_response = try scrolls.toOwnedSlice();
-
-            try std.json.stringify(scrolls_response, .{}, string.writer());
-
-            const s = try string.toOwnedSlice();
-
-            r.setStatus(.ok);
-            try r.setContentType(.JSON);
-            try r.sendBody(s);
+            return try r.sendJson(s);
         }
+
+        const query_result = try context.db_connection.query("SELECT * FROM scroll", .{});
+        defer query_result.deinit();
+
+        var scrolls = std.ArrayList(Scroll).init(arena);
+
+        while (try query_result.next()) |row| {
+            const id = row.get(i32, 0);
+
+            const rank = Level.from_string(row.get([]u8, 1));
+
+            const jutsu = row.get([]u8, 2);
+
+            const usage = row.get([]u8, 3);
+
+            const scroll = Scroll{
+                .id = @bitCast(id),
+                .rank = rank,
+                .jutsu = jutsu,
+                .usage = usage,
+            };
+
+            try scrolls.append(scroll);
+        }
+
+        var string = std.ArrayList(u8).init(arena);
+
+        const scrolls_response = try scrolls.toOwnedSlice();
+
+        try std.json.stringify(scrolls_response, .{}, string.writer());
+
+        const s = try string.toOwnedSlice();
+
+        r.setStatus(.ok);
+        try r.setContentType(.JSON);
+        try r.sendBody(s);
     }
 
     pub fn post(_: *ScrollEndpoint, arena: Allocator, context: *MyContext, r: zap.Request) !void {
